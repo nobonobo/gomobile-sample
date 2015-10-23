@@ -1,18 +1,18 @@
 PKG=noboapp1
-NAME=$(basename $(PKG))
-LABEL=Noboapp1
+NAME=$(shell basename $(PKG))
+LABEL=NoboApp1
 
 WORK=$(PWD)
 GOMOBILEPATH:=$(GOPATH)
 GOMOBILE=$(GOMOBILEPATH)/pkg/gomobile
 GOMOBILEBIN=$(GOMOBILEPATH)/bin/gomobile
 BUILD=$(WORK)/build
-export GOPATH:=$(GOMOBILEPATH):$(PWD)
+export GOPATH:=$(PWD):$(GOMOBILEPATH)
 
 CC=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang
 CXX=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang
-SDK=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS9.0.sdk
-ADB=/opt/homebrew-cask/Caskroom/genymotion/2.5.2/Genymotion.app/Contents/MacOS/tools/adb
+SDK=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
+ADB=$(shell which adb || echo /opt/homebrew-cask/Caskroom/genymotion/2.5.2/Genymotion.app/Contents/MacOS/tools/adb)
 SUBJ=CN=$(NAME),O=$(NAME).gomobile.apps,C=JP
 KEYSTOREPASS=password
 
@@ -22,7 +22,7 @@ SRC=$(shell find ./src -name *.go)
 
 all: apk app
 
-app: $(BUILD)/$(NAME).app
+app: $(BUILD)/main/main
 apk: $(BUILD)/$(NAME).apk
 
 icons: $(BUILD)/main/Images.xcassets/AppIcon.appiconset $(BUILD)/icons
@@ -46,7 +46,7 @@ $(BUILD)/main.xcodeproj: $(GOMOBILE)
 	cp -Rf $$WORK/main $(BUILD)/
 	touch $(WORK)/ios.png
 
-$(BUILD)/$(NAME).app: $(BUILD)/main.xcodeproj $(BUILD)/main/Images.xcassets/AppIcon.appiconset $(SDK) $(SRC)
+$(BUILD)/main/main: $(BUILD)/main.xcodeproj $(BUILD)/main/Images.xcassets/AppIcon.appiconset $(SDK) $(SRC)
 	GOOS=darwin GOARCH=arm GOARM=7 CC=$(CC) CXX=$(CXX) CGO_CFLAGS="-isysroot $(SDK) -arch armv7" CGO_LDFLAGS="-isysroot $(SDK) -arch armv7" CGO_ENABLED=1 go build -p=4 -pkgdir=$(GOMOBILE)/pkg_darwin_arm -tags="" -x -work -tags=ios -o=$(BUILD)/arm $(PKG)
 	GOOS=darwin GOARCH=arm64 CC=$(CC) CXX=$(CXX) CGO_CFLAGS="-isysroot $(SDK) -arch arm64" CGO_LDFLAGS="-isysroot $(SDK) -arch arm64" CGO_ENABLED=1 go build -p=4 -pkgdir=$(GOMOBILE)/pkg_darwin_arm64 -tags="" -x -work -tags=ios -o=$(BUILD)/arm64 $(PKG)
 	xcrun lipo -create $(BUILD)/arm $(BUILD)/arm64 -o $(BUILD)/main/main
@@ -56,7 +56,7 @@ $(BUILD)/$(NAME).app: $(BUILD)/main.xcodeproj $(BUILD)/main/Images.xcassets/AppI
 	mv $(BUILD)/build/Release-iphoneos/main.app $(BUILD)/$(NAME).app
 
 $(BUILD)/$(NAME).apk: $(BUILD)/icons $(SRC) $(WORK)/AndroidManifest.xml
-	$(GOMOBILEBIN) build -target android -o $(BUILD)/$(NAME).apk $(NAME)
+	$(GOMOBILEBIN) build -target android -o $(BUILD)/$(NAME).apk $(PKG)
 	keytool -genkey -keystore $(BUILD)/app.keystore -storepass $(KEYSTOREPASS) \
 	-dname "$(SUBJ)" -keypass $(KEYSTOREPASS) -keyalg RSA -validity 18250 \
 	-alias $(NAME) || true
@@ -77,9 +77,9 @@ $(BUILD)/$(NAME).apk: $(BUILD)/icons $(SRC) $(WORK)/AndroidManifest.xml
     -tsa http://timestamp.digicert.com \
     -keystore $(BUILD)/app.keystore \
     $(BUILD)/$(NAME).apk \
-    $(NAME)
+    $(NAME) || rm -rf $(BUILD)/$(NAME).apk
 
-install-app: $(BUILD)/$(NAME).app
+install-app: $(BUILD)/main/main
 	ios-deploy -b $(BUILD)/$(NAME).app
 
 install-apk: $(BUILD)/$(NAME).apk
